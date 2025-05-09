@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
   <meta charset="UTF-8" />
-  <title>Galactica++ (arrow‑fiender)</title>
+  <title>Galaxy Wars (arrow‑fiender)</title>
   <style>
     body   { margin: 0; overflow: hidden; background: #000; }
     canvas { display: block; margin: 0 auto; }
@@ -186,7 +186,7 @@ function setup () {
   player = new Player();
   createEnemies();
   stars = Array.from({ length: 100 }, () => new Star());
-  highscore = int(localStorage.getItem('galactica_highscore') || 0);
+  highscore = int(localStorage.getItem('galaxy_wars_highscore') || 0);
 }
 
 /*****************
@@ -203,7 +203,7 @@ function draw () {
   explosions = explosions.filter(e => !e.isDone());
 
   // UI‑tilstander
-  if (showStartScreen) { drawUI('Galactica++', 'Trykk mellomrom for å starte'); return; }
+  if (showStartScreen) { drawUI('Galaxy Wars', 'Trykk mellomrom for å starte'); return; }
   if (gameOver)       { drawUI('GAME OVER', 'Trykk mellomrom for å prøve igjen'); return; }
 
   // spillobjekter
@@ -243,7 +243,7 @@ function keyPressed () {
 }
 
 function resetGame () {
-  if (score > highscore) localStorage.setItem('galactica_highscore', score);
+  if (score > highscore) localStorage.setItem('galaxy_wars_highscore', score);
   level = 1; score = 0; enemySpeed = 1;
   bullets = []; enemyBullets = []; explosions = [];
   player = new Player(); createEnemies(); gameOver = false;

@@ -1,10 +1,13 @@
-# Galactica++
+# Galaxy Wars
 
-A fast-paced space shooter game where you control a spaceship to defeat waves of enemy ships.
+A simple Galaga clone created by "vibe coding" with Qwen3 8B. 
+This was created to test the ability of small local LLMs for coding use. 
+
+Galaxy Wars is a fast-paced space shooter game where you control a spaceship to defeat waves of enemy ships.
 
 ## Description
 
-Galactica++ is a browser-based arcade-style space shooter inspired by classic games like Galaga. Navigate your ship through space, shoot down enemy ships, and avoid enemy fire while progressing through increasingly difficult levels.
+Galaxy Wars is a browser-based arcade-style space shooter inspired by classic games like Galaga. Navigate your ship through space, shoot down enemy ships, and avoid enemy fire while progressing through increasingly difficult levels.
 
 ## Features
 
