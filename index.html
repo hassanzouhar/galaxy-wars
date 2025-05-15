@@ -2,7 +2,7 @@
 <html lang="no">
 <head>
   <meta charset="UTF-8" />
-  <title>Galaxy Wars (arrow‑fiender)</title>
+  <title>Galaxy Wars v0.3</title>
   <style>
     body   { margin: 0; overflow: hidden; background: #000; }
     canvas { display: block; margin: 0 auto; }
@@ -207,8 +207,8 @@ function draw () {
   explosions = explosions.filter(e => !e.isDone());
 
   // UI‑tilstander
-  if (showStartScreen) { drawUI('Galaxy Wars', 'Trykk mellomrom for å starte'); return; }
-  if (gameOver)       { drawUI('GAME OVER', 'Trykk mellomrom for å prøve igjen'); return; }
+  if (showStartScreen) { drawUI('Galaxy Wars', 'Press [Space] to begin'); return; }
+  if (gameOver)       { drawUI('GAME OVER', 'Press [Space] to restart'); return; }
 
   // spillobjekter
   player.update(); player.draw();
@@ -226,8 +226,8 @@ function draw () {
   enemyBullets  = enemyBullets.filter(b => b.y < height);
 
   // HUD
-  drawLabel(`Poeng: ${score}`, 10, 10);
-  drawLabel(`Nivå:  ${level}`, 10, 30);
+  drawLabel(`Score: ${score}`, 10, 10);
+  drawLabel(`Level:  ${level}`, 10, 30);
   drawLabel(`Highscore: ${highscore}`, 10, 50);
   if (tripleShot) drawLabel('POWER‑UP: TRIPLE SHOT', width - 250, 10);
 
