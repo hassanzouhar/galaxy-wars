@@ -91,6 +91,106 @@ class Particle {
   }
 }
 
+// ==================
+// KamikazeEnemy Class
+// ==================
+class KamikazeEnemy extends Enemy {
+  constructor(x, y) {
+    super(x, y);
+    this.health = 1;
+    this.scoreValue = 15;
+    this.speed = 2 + level * 0.2; // Faster than normal
+    this.type = 'kamikaze';
+  }
+
+  draw() {
+    push();
+    translate(this.x + this.w / 2, this.y + this.h / 2);
+    
+    let pulse = sin(frameCount * 0.3) * 3; // Pulsating effect for size
+    let bodyColor = color(255, 200, 0); // Orange-yellow
+    let spikeColor = color(255, 100, 0); // Red-Orange for spikes
+
+    // Main body
+    fill(bodyColor);
+    stroke(spikeColor);
+    strokeWeight(2);
+    ellipse(0, 0, this.w * 0.7 + pulse, this.h * 0.7 + pulse);
+
+    // Spikes (simple lines for now)
+    for (let i = 0; i < 8; i++) {
+      let angle = TWO_PI / 8 * i;
+      let length = this.w * 0.5 + pulse;
+      line(0, 0, cos(angle) * length, sin(angle) * length);
+    }
+    
+    pop();
+  }
+
+  update() {
+    // Move towards the player's center
+    let targetX = player.x + player.w / 2;
+    let targetY = player.y + player.h / 2;
+    let currentX = this.x + this.w / 2;
+    let currentY = this.y + this.h / 2;
+
+    let dir = createVector(targetX - currentX, targetY - currentY);
+    dir.normalize();
+    this.x += dir.x * this.speed;
+    this.y += dir.y * this.speed;
+    // Kamikaze enemies are not affected by global enemyDirection or y-shift from edge hits.
+  }
+}
+
+// ===============
+// TankEnemy Class
+// ===============
+class TankEnemy extends Enemy {
+  constructor(x, y) {
+    super(x, y);
+    this.health = 3; // More health
+    this.scoreValue = 30;
+    this.w = 50; // Tank is wider
+    this.h = 35; // Tank is a bit taller
+    this.speed = enemySpeed * 0.75; // Slower than normal, relative to current global enemySpeed
+    this.type = 'tank';
+  }
+
+  draw() {
+    push();
+    translate(this.x, this.y); // Translate to top-left for easier rect drawing
+
+    let bodyColor = color(100, 100, 120); // Dark bluish gray
+    let accentColor = color(70, 70, 90);  // Darker accent
+    let cannonColor = color(50, 50, 60);  // Very dark gray for cannon
+
+    // Main body
+    fill(bodyColor);
+    noStroke();
+    rect(0, 0, this.w, this.h, 3); // Rounded corners
+
+    // Tread-like accents
+    fill(accentColor);
+    rect(0, this.h * 0.1, this.w, this.h * 0.2);
+    rect(0, this.h * 0.7, this.w, this.h * 0.2);
+    
+    // Cannon (simple rectangle pointing forward/down)
+    fill(cannonColor);
+    // Center the cannon on the front half
+    rect(this.w * 0.4, this.h, this.w * 0.2, this.h * 0.4); // Small cannon stub
+
+    pop();
+  }
+
+  update() {
+    // Update speed in case global enemySpeed changes
+    this.speed = enemySpeed * 0.75; 
+    this.x += enemyDirection * this.speed;
+    // TankEnemy does not use zigzag.
+    // It will be affected by the y-shift from the base Enemy.update() if an edge is hit.
+  }
+}
+
 // ==============
 // PowerUp Class
 // ==============
@@ -256,22 +356,72 @@ class Enemy {
     this.h = 28; // Height
     this.origX = x; // Original x-position for zigzag pattern
     this.zigzag = (y / 40) % 2 === 0; // Determines if this enemy uses zigzag movement
+    this.health = 1; // Default health
+    this.scoreValue = 10; // Default score value
+    this.type = 'normal'; // Default enemy type
   }
 
   // Updates enemy position and behavior
   update() {
-    if (this.zigzag) {
-      // Sinusoidal movement for zigzag pattern
-      this.x = this.origX + sin(frameCount * 0.12) * 20;
-    } else {
-      // Standard side-to-side movement
-      this.x += enemyDirection * enemySpeed;
+    // Default movement for 'normal' type
+    if (this.type === 'normal') {
+      if (this.zigzag) {
+        // Sinusoidal movement for zigzag pattern
+        this.x = this.origX + sin(frameCount * 0.12) * 20;
+      } else {
+        // Standard side-to-side movement
+        this.x += enemyDirection * enemySpeed;
+      }
     }
 
-    // If enemies hit the edge of the screen
+    // Global edge detection and reaction
+    // This part is called for every enemy, but specific types might have already updated their x,y
+    // or might ignore the y-shift.
+    let hitEdge = false;
     if (this.x < 0 || this.x + this.w > width) {
-      enemyDirection *= -1; // Reverse direction for all enemies
-      enemies.forEach(e => e.y += 10); // Move all enemies down
+      // Check if this instance is the one triggering the direction change.
+      // To prevent multiple direction changes in one frame if multiple enemies hit the wall.
+      // This simple check might still allow multiple flips if enemies are perfectly aligned.
+      // A more robust solution would be to check this once per frame in the main draw loop.
+      // For now, let's assume this is okay for typical gameplay scenarios.
+      if ( (this.x < 0 && enemyDirection === -1) || (this.x + this.w > width && enemyDirection === 1) ) {
+        // This enemy is at the edge and moving towards it, so it's a "fresh" hit.
+      } else {
+        // This enemy is at the edge but the direction has already flipped, or it's moving away.
+        // Do not trigger another immediate flip.
+      }
+       hitEdge = true; // Mark that an edge was hit by at least one enemy
+    }
+
+    if (hitEdge && ( (this.x < 0 && enemyDirection === 1) || (this.x + this.w > width && enemyDirection === -1) ) ) {
+      // This condition means an enemy is at the edge, but the global direction is already set to move it away.
+      // This can happen if the direction flipped in a previous enemy's update call in the same frame.
+      // To prevent it from being pushed further off-screen or getting stuck, we might skip the y-shift for it.
+      // Or, more simply, the global direction flip should only happen once.
+      // Let's refine this: the direction flip should be handled by the game loop, not individual enemies.
+      // For this iteration, we'll keep it simple: if an enemy hits an edge, it triggers the direction flip.
+      // This might cause multiple flips if not careful.
+    }
+
+
+    // The problem of multiple direction flips and y-shifts per frame if many enemies hit the edge:
+    // A better approach is to detect if *any* enemy hit an edge during the update phase,
+    // then apply the direction change and y-shift *once* in the main draw loop.
+    // However, the current structure calls update() on each enemy individually.
+
+    // Simplified edge logic for now (will apply to the one that hits it):
+    if (this.x < 0 || this.x + this.w > width) {
+        // Only flip direction if the current direction would push it further out.
+        // This prevents immediate re-flipping if multiple enemies are at the edge.
+        if ((this.x < 0 && enemyDirection === -1) || (this.x + this.w > width && enemyDirection === 1)) {
+            enemyDirection *= -1; // Reverse direction for all enemies
+            let verticalStep = 10 + floor(level / 2) * 2; // Define vertical step based on level
+            enemies.forEach(e => {
+                if (e.type !== 'kamikaze') { // Kamikaze enemies ignore the group y-shift
+                    e.y += verticalStep; // Use dynamic vertical step
+                }
+            });
+        }
     }
   }
 
@@ -483,7 +633,7 @@ function draw() {
   // Check for level completion
   if (enemies.length === 0) {
     level++;
-    enemySpeed = min(1 + level * 0.3, 3); // Increase enemy speed, capped at 3
+    enemySpeed = min(1 + level * 0.45, 4.5); // Adjusted enemy speed scaling
     createEnemies(); // Spawn new wave of enemies
   }
 }
@@ -556,18 +706,60 @@ function drawUI(title, subtitle) {
  * Creates and populates the enemies array for the current level.
  */
 function createEnemies() {
-  enemies = []; // Clear existing enemies
-  // Determine number of rows and columns based on level
+  enemies = [];
   const rows = 3 + floor(level / 2);
   const cols = 5 + level;
 
   for (let i = 0; i < rows; i++) {
     for (let j = 0; j < cols; j++) {
-      // Calculate enemy position using defined constants
       const x = ENEMY_GRID_START_X + j * ENEMY_SPACING_X;
       const y = ENEMY_GRID_START_Y + i * ENEMY_SPACING_Y;
-      enemies.push(new Enemy(x, y));
+      
+      let enemyTypeChance = random();
+
+      // Higher chance for normal enemies, especially at low levels
+      if (level < 3 && enemyTypeChance < 0.8) { // 80% chance for normal at level < 3
+        enemies.push(new Enemy(x, y)); 
+      } else if (level >= 2 && enemyTypeChance < 0.20) { // 20% chance for Tank (if level >=2)
+         // Try to avoid spawning too many tanks in one row, or ensure they have space
+        if (j % 3 === 0) { // Example: spawn a tank every 3rd column position if chance hits
+             enemies.push(new TankEnemy(x, y));
+        } else {
+             enemies.push(new Enemy(x,y)); // Default to normal if not spawning tank
+        }
+      } else if (level >= 3 && enemyTypeChance < 0.15) { // 15% chance for Kamikaze (if level >=3)
+        // Kamikazes are more dangerous, spawn them less frequently initially
+        enemies.push(new KamikazeEnemy(x, y));
+      } else { // Default to normal enemy
+        enemies.push(new Enemy(x, y));
+      }
     }
+  }
+  // Ensure not too many Kamikazes are spawned, e.g. cap them.
+  let kamikazeCount = enemies.filter(e => e.type === 'kamikaze').length;
+  const maxKamikazes = 2 + floor(level / 2); // Max kamikazes allowed
+  while (kamikazeCount > maxKamikazes) {
+      const kamikazeIndex = enemies.findIndex(e => e.type === 'kamikaze');
+      if (kamikazeIndex !== -1) {
+          const oldKamikaze = enemies[kamikazeIndex];
+          enemies.splice(kamikazeIndex, 1, new Enemy(oldKamikaze.x, oldKamikaze.y)); // Replace with normal
+          kamikazeCount--;
+      } else {
+          break; 
+      }
+  }
+   // Similar cap for Tanks
+  let tankCount = enemies.filter(e => e.type === 'tank').length;
+  const maxTanks = 2 + floor(level / 3); 
+  while (tankCount > maxTanks) {
+      const tankIndex = enemies.findIndex(e => e.type === 'tank');
+      if (tankIndex !== -1) {
+          const oldTank = enemies[tankIndex];
+          enemies.splice(tankIndex, 1, new Enemy(oldTank.x, oldTank.y)); // Replace with normal
+          tankCount--;
+      } else {
+          break;
+      }
   }
 }
 
@@ -581,8 +773,19 @@ function enemyShoot() {
   }
 
   const randomEnemy = random(enemies); // p5.js function to pick a random element from an array
-  // Create a new bullet originating from the center of the chosen enemy's bottom edge
-  enemyBullets.push(new EnemyBullet(randomEnemy.x + randomEnemy.w / 2, randomEnemy.y + randomEnemy.h));
+
+  if (randomEnemy.type === 'tank') {
+    // TankEnemy fires a burst of three bullets
+    const bulletX = randomEnemy.x + randomEnemy.w / 2;
+    const bulletY = randomEnemy.y + randomEnemy.h;
+    enemyBullets.push(new EnemyBullet(bulletX, bulletY));
+    enemyBullets.push(new EnemyBullet(bulletX - 10, bulletY + 5));
+    enemyBullets.push(new EnemyBullet(bulletX + 10, bulletY + 5));
+  } else if (randomEnemy.type !== 'kamikaze') {
+    // Normal enemies (and any other future types that aren't kamikaze) fire a single bullet
+    enemyBullets.push(new EnemyBullet(randomEnemy.x + randomEnemy.w / 2, randomEnemy.y + randomEnemy.h));
+  }
+  // Kamikaze enemies (randomEnemy.type === 'kamikaze') do not fire.
 }
 
 // ========================
@@ -601,22 +804,33 @@ function checkCollisions() {
       const enemy = enemies[j];
       if (bullet.hits(enemy)) {
         bullets.splice(i, 1); // Remove the bullet
-        enemies.splice(j, 1); // Remove the enemy
 
-        // Create an explosion at the enemy's center
-        explosions.push(new Explosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2));
-        score += 10; // Increase score
-        explodeSound.play();
-
-        // Chance to activate triple shot power-up
-        if (random() < 0.05) { // 5% chance
-          activateTripleShot();
+        if (enemy.type === 'tank') {
+          enemy.health--;
+          if (enemy.health <= 0) {
+            enemies.splice(j, 1); // Remove the tank only when health is 0
+            explosions.push(new Explosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2));
+            score += enemy.scoreValue; // Use enemy's specific score value
+            explodeSound.play();
+            // Power-up chance
+            if (random() < 0.1) { // 10% chance (adjust as needed)
+              powerUps.push(new PowerUp(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 'shield'));
+            }
+          } else {
+            // Optional: Play a different sound for tank hit but not destroyed
+            // shotSound.play(); // Or a specific "clink" sound if available
+          }
+        } else { // For 'normal' and 'kamikaze' enemies (1 hit kill)
+          enemies.splice(j, 1); // Remove the enemy
+          explosions.push(new Explosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2));
+          score += enemy.scoreValue; // Use enemy's specific score value
+          explodeSound.play();
+          // Power-up chance (Kamikazes can also drop power-ups)
+          if (random() < 0.1) {
+            powerUps.push(new PowerUp(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 'shield'));
+          }
         }
-        // Chance to drop a shield power-up
-        if (random() < 0.1) { // 10% chance
-          powerUps.push(new PowerUp(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 'shield'));
-        }
-        break; // Bullet can only hit one enemy per frame, so exit inner loop
+        break; // Bullet can only hit one enemy per frame
       }
     }
   }
@@ -648,6 +862,38 @@ function checkCollisions() {
         gameOver = true; // Set game over flag
         explodeSound.play();
         break; // Game over, no need to check further collisions this frame
+      }
+    }
+  }
+
+  // Direct enemy collision with player
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const enemy = enemies[i];
+    // Using a simple AABB collision check for player vs enemy:
+    if (player.x < enemy.x + enemy.w &&
+        player.x + player.w > enemy.x &&
+        player.y < enemy.y + enemy.h &&
+        player.y + player.h > enemy.y) {
+
+      if (enemy.type === 'kamikaze') {
+        // Kamikaze explodes, damages player, and is destroyed
+        explosions.push(new Explosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2));
+        enemies.splice(i, 1); // Remove Kamikaze
+        
+        // Damage player (shield or game over)
+        if (player.shieldStrength > 0) {
+          player.shieldStrength--;
+          shotSound.play(); // Sound for shield hit
+        } else {
+          gameOver = true;
+          explodeSound.play();
+        }
+        // If game over, no need to check further collisions this frame
+        if (gameOver) break; 
+
+      } else { 
+        // Optional: What happens if a normal/tank enemy collides? 
+        // For now, let's keep it simple: only kamikazes do collision damage.
       }
     }
   }
