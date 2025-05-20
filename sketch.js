@@ -13,6 +13,7 @@ let enemies = []; // Array to store enemy objects
 let enemyBullets = []; // Array to store enemy bullets
 let explosions = []; // Array to store explosion effects
 let stars = []; // Array for the starfield background
+let powerUps = []; // Array to store power-up objects
 
 let level = 1; // Current game level
 let score = 0; // Player's score
@@ -87,6 +88,36 @@ class Particle {
   // Checks if the particle is still visible
   isAlive() {
     return this.alpha > 0;
+  }
+}
+
+// ==============
+// PowerUp Class
+// ==============
+class PowerUp {
+  constructor(x, y, type) {
+    this.x = x;
+    this.y = y;
+    this.type = type;
+    this.w = 20;
+    this.h = 20;
+    this.speed = 2;
+  }
+
+  update() {
+    this.y += this.speed;
+  }
+
+  draw() {
+    if (this.type === 'shield') {
+      fill(0, 255, 255); // Cyan color for shield power-up
+      noStroke();
+      rect(this.x, this.y, this.w, this.h);
+    }
+  }
+
+  isOffScreen() {
+    return this.y > height;
   }
 }
 
@@ -299,6 +330,8 @@ class Player {
     this.x = width / 2 - this.w / 2; // Initial x-position (centered)
     this.y = height - this.h - 10; // Initial y-position (bottom of screen)
     this.speed = 5; // Movement speed
+    this.shieldStrength = 3; // Player's shield strength
+    this.maxShieldStrength = 3; // Maximum shield strength
   }
 
   // Updates player position based on input
@@ -317,6 +350,13 @@ class Player {
   draw() {
     push();
     translate(this.x + this.w / 2, this.y + this.h / 2); // Center drawing at player's logical center
+
+    // Draw shield if active
+    if (this.shieldStrength > 0) {
+      noStroke();
+      fill(0, 255, 255, 100); // Semi-transparent cyan
+      ellipse(0, 0, this.w * 0.8 * 2, this.w * 0.8 * 2); // Shield circle
+    }
 
     // Main body (triangle)
     fill(0, 255, 255); // Cyan color
@@ -386,6 +426,10 @@ function draw() {
   explosions.forEach(e => { e.update(); e.draw(); });
   explosions = explosions.filter(e => !e.isDone()); // Remove finished explosions
 
+  // Update and draw power-ups
+  powerUps.forEach(p => { p.update(); p.draw(); });
+  powerUps = powerUps.filter(p => !p.isOffScreen()); // Remove power-ups that go off-screen
+
   // Handle different game states (start screen, game over screen)
   if (showStartScreen) {
     drawUI('Galaxy Wars', 'Press [Space] to begin');
@@ -424,6 +468,7 @@ function draw() {
   drawLabel(`Score: ${score}`, 10, 10);
   drawLabel(`Level:  ${level}`, 10, 30);
   drawLabel(`Highscore: ${highscore}`, 10, 50);
+  drawLabel(`Shield: ${player.shieldStrength}/${player.maxShieldStrength}`, 10, 70);
   if (tripleShot) {
     drawLabel('POWER-UP: TRIPLE SHOT', width - 250, 10);
   }
@@ -479,8 +524,10 @@ function resetGame() {
   bullets = [];
   enemyBullets = [];
   explosions = [];
+  powerUps = []; // Reset power-ups
 
   player = new Player(); // Recreate player
+  player.shieldStrength = player.maxShieldStrength; // Reset shield strength
   createEnemies(); // Recreate enemies
   gameOver = false;
   tripleShot = false;
@@ -565,18 +612,43 @@ function checkCollisions() {
         if (random() < 0.05) { // 5% chance
           activateTripleShot();
         }
+        // Chance to drop a shield power-up
+        if (random() < 0.1) { // 10% chance
+          powerUps.push(new PowerUp(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, 'shield'));
+        }
         break; // Bullet can only hit one enemy per frame, so exit inner loop
       }
     }
   }
 
+  // Player collision with power-ups
+  for (let i = powerUps.length - 1; i >= 0; i--) {
+    const p = powerUps[i];
+    if (player.x < p.x + p.w &&
+        player.x + player.w > p.x &&
+        player.y < p.y + p.h &&
+        player.y + player.h > p.y) {
+      if (p.type === 'shield') {
+        player.shieldStrength = min(player.shieldStrength + 1, player.maxShieldStrength);
+      }
+      powerUps.splice(i, 1); // Remove the power-up
+    }
+  }
+
   // Enemy bullets vs. Player
-  // Iterate through all enemy bullets
-  for (const enemyBullet of enemyBullets) {
+  // Iterate through all enemy bullets using a reverse loop to allow safe removal
+  for (let i = enemyBullets.length - 1; i >= 0; i--) {
+    const enemyBullet = enemyBullets[i];
     if (enemyBullet.hits(player)) {
-      gameOver = true; // Set game over flag
-      explodeSound.play();
-      break; // Game over, no need to check further collisions this frame
+      if (player.shieldStrength > 0) {
+        player.shieldStrength--; // Decrease shield strength
+        enemyBullets.splice(i, 1); // Remove the bullet
+        shotSound.play(); // Play a sound for shield hit
+      } else {
+        gameOver = true; // Set game over flag
+        explodeSound.play();
+        break; // Game over, no need to check further collisions this frame
+      }
     }
   }
 }
