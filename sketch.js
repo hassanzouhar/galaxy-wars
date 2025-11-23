@@ -30,6 +30,12 @@ let tripleTimer = 0; // Timer for triple shot duration
 
 let shotSound, explodeSound; // Sound effects
 
+// Mobile touch controls
+let touchingLeft = false; // Flag for touching left side of screen
+let touchingRight = false; // Flag for touching right side of screen
+let autoShootTimer = 0; // Timer for automatic shooting
+let isMobile = false; // Flag to detect mobile device
+
 // ===================
 // Asset Preloading
 // ===================
@@ -486,12 +492,22 @@ class Player {
 
   // Updates player position based on input
   update() {
+    // Keyboard controls
     if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) { // 'A' key for left
       this.x -= this.speed;
     }
     if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) { // 'D' key for right
       this.x += this.speed;
     }
+
+    // Touch controls
+    if (touchingLeft) {
+      this.x -= this.speed;
+    }
+    if (touchingRight) {
+      this.x += this.speed;
+    }
+
     // Constrain player within screen bounds
     this.x = constrain(this.x, 0, width - this.w);
   }
@@ -554,6 +570,10 @@ function setup() {
   createCanvas(windowWidth, windowHeight); // Create full-screen canvas
   textFont('monospace'); // Set a monospaced font for UI text
 
+  // Detect mobile device
+  isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+              || (window.innerWidth <= 768);
+
   player = new Player(); // Create the player object
   createEnemies(); // Initialize the first wave of enemies
   stars = Array.from({ length: 100 }, () => new Star()); // Create background stars
@@ -582,17 +602,32 @@ function draw() {
 
   // Handle different game states (start screen, game over screen)
   if (showStartScreen) {
-    drawUI('Galaxy Wars', 'Press [Space] to begin');
+    const startMsg = isMobile ? 'Tap to begin' : 'Press [Space] to begin';
+    drawUI('Galaxy Wars', startMsg);
+    if (isMobile) {
+      drawLabel('Touch left/right to move', width / 2, height / 2 + 40, max(14, width / 50), CENTER);
+      drawLabel('Auto-fires continuously', width / 2, height / 2 + 65, max(12, width / 55), CENTER);
+    }
     return; // Skip the rest of the game loop
   }
   if (gameOver) {
-    drawUI('GAME OVER', 'Press [Space] to restart');
+    const restartMsg = isMobile ? 'Tap to restart' : 'Press [Space] to restart';
+    drawUI('GAME OVER', restartMsg);
     return; // Skip the rest of the game loop
   }
 
   // --- Active Gameplay ---
   player.update();
   player.draw();
+
+  // Auto-shoot for mobile (shoots every 15 frames / ~4 shots per second)
+  if (isMobile) {
+    autoShootTimer++;
+    if (autoShootTimer > 15) {
+      player.shoot();
+      autoShootTimer = 0;
+    }
+  }
 
   // Update and draw bullets (player and enemy)
   bullets.forEach(b => { b.update(); b.draw(); });
@@ -614,13 +649,22 @@ function draw() {
   bullets = bullets.filter(b => b.y > 0); // Remove bullets that go off-screen (top)
   enemyBullets = enemyBullets.filter(b => b.y < height); // Remove enemy bullets off-screen (bottom)
 
-  // Display Heads-Up Display (HUD)
-  drawLabel(`Score: ${score}`, 10, 10);
-  drawLabel(`Level:  ${level}`, 10, 30);
-  drawLabel(`Highscore: ${highscore}`, 10, 50);
-  drawLabel(`Shield: ${player.shieldStrength}/${player.maxShieldStrength}`, 10, 70);
+  // Display Heads-Up Display (HUD) - responsive sizing
+  const hudSize = isMobile ? max(12, width / 40) : 16;
+  const hudSpacing = hudSize + 4;
+  drawLabel(`Score: ${score}`, 10, 10, hudSize);
+  drawLabel(`Level:  ${level}`, 10, 10 + hudSpacing, hudSize);
+  drawLabel(`Highscore: ${highscore}`, 10, 10 + hudSpacing * 2, hudSize);
+  drawLabel(`Shield: ${player.shieldStrength}/${player.maxShieldStrength}`, 10, 10 + hudSpacing * 3, hudSize);
   if (tripleShot) {
-    drawLabel('POWER-UP: TRIPLE SHOT', width - 250, 10);
+    const powerUpText = isMobile ? 'x3 SHOT' : 'POWER-UP: TRIPLE SHOT';
+    const powerUpX = isMobile ? width - 80 : width - 250;
+    drawLabel(powerUpText, powerUpX, 10, hudSize);
+  }
+
+  // Mobile control hints (visual touch zones)
+  if (isMobile && !gameOver && !showStartScreen) {
+    drawTouchControlHints();
   }
 
   // Enemy shooting logic
@@ -692,10 +736,36 @@ function resetGame() {
 function drawUI(title, subtitle) {
   fill(255); // White text
   textAlign(CENTER, CENTER);
-  textSize(40);
+  const titleSize = isMobile ? max(24, width / 15) : 40;
+  const subtitleSize = isMobile ? max(14, width / 30) : 20;
+  textSize(titleSize);
   text(title, width / 2, height / 2 - 40);
-  textSize(20);
+  textSize(subtitleSize);
   text(subtitle, width / 2, height / 2);
+}
+
+/**
+ * Draws visual hints for touch controls on mobile
+ */
+function drawTouchControlHints() {
+  push();
+  noStroke();
+
+  // Semi-transparent zones showing touch areas
+  fill(255, 255, 255, touchingLeft ? 40 : 15);
+  rect(0, height - 150, width / 2, 150);
+
+  fill(255, 255, 255, touchingRight ? 40 : 15);
+  rect(width / 2, height - 150, width / 2, 150);
+
+  // Arrow indicators
+  fill(255, 255, 255, 100);
+  textAlign(CENTER, CENTER);
+  textSize(max(20, width / 25));
+  text('◀', width / 4, height - 75);
+  text('▶', (width * 3) / 4, height - 75);
+
+  pop();
 }
 
 // ====================
@@ -917,4 +987,57 @@ function activateTripleShot() {
 // p5.js function: Called once every time the browser window is resized.
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight); // Adjust canvas size to new window dimensions
+  // Re-detect mobile on resize
+  isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+              || (window.innerWidth <= 768);
+}
+
+// ====================
+// Touch Event Handling
+// ====================
+// p5.js function: Called when a touch starts
+function touchStarted() {
+  handleTouch();
+  return false; // Prevent default
+}
+
+// p5.js function: Called when a touch moves
+function touchMoved() {
+  handleTouch();
+  return false; // Prevent default
+}
+
+// p5.js function: Called when a touch ends
+function touchEnded() {
+  touchingLeft = false;
+  touchingRight = false;
+  return false; // Prevent default
+}
+
+/**
+ * Handles touch input for movement and game state
+ */
+function handleTouch() {
+  // Handle game state transitions (start/restart)
+  if (showStartScreen) {
+    showStartScreen = false;
+    return;
+  }
+  if (gameOver) {
+    resetGame();
+    return;
+  }
+
+  // Handle movement during active gameplay
+  touchingLeft = false;
+  touchingRight = false;
+
+  for (let i = 0; i < touches.length; i++) {
+    const touch = touches[i];
+    if (touch.x < width / 2) {
+      touchingLeft = true;
+    } else {
+      touchingRight = true;
+    }
+  }
 }
