@@ -97,6 +97,133 @@ class Particle {
   }
 }
 
+/**
+ * Represents an enemy ship.
+ * The comment "Enemy - én 'Arrow'" seems to be a note in Norwegian,
+ * possibly referring to the shape or type of enemy.
+ */
+class Enemy {
+  constructor(x, y) {
+    this.x = x; // X-coordinate
+    this.y = y; // Y-coordinate
+    this.w = 40; // Width
+    this.h = 28; // Height
+    this.origX = x; // Original x-position for zigzag pattern
+    this.zigzag = (y / 40) % 2 === 0; // Determines if this enemy uses zigzag movement
+    this.health = 1; // Default health
+    this.scoreValue = 10; // Default score value
+    this.type = 'normal'; // Default enemy type
+  }
+
+  // Updates enemy position and behavior
+  update() {
+    // Default movement for 'normal' type
+    if (this.type === 'normal') {
+      if (this.zigzag) {
+        // Sinusoidal movement for zigzag pattern
+        this.x = this.origX + sin(frameCount * 0.12) * 20;
+      } else {
+        // Standard side-to-side movement
+        this.x += enemyDirection * enemySpeed;
+      }
+    }
+
+    // Global edge detection and reaction
+    // This part is called for every enemy, but specific types might have already updated their x,y
+    // or might ignore the y-shift.
+    let hitEdge = false;
+    if (this.x < 0 || this.x + this.w > width) {
+      // Check if this instance is the one triggering the direction change.
+      // To prevent multiple direction changes in one frame if multiple enemies hit the wall.
+      // This simple check might still allow multiple flips if enemies are perfectly aligned.
+      // A more robust solution would be to check this once per frame in the main draw loop.
+      // For now, let's assume this is okay for typical gameplay scenarios.
+      if ( (this.x < 0 && enemyDirection === -1) || (this.x + this.w > width && enemyDirection === 1) ) {
+        // This enemy is at the edge and moving towards it, so it's a "fresh" hit.
+      } else {
+        // This enemy is at the edge but the direction has already flipped, or it's moving away.
+        // Do not trigger another immediate flip.
+      }
+       hitEdge = true; // Mark that an edge was hit by at least one enemy
+    }
+
+    if (hitEdge && ( (this.x < 0 && enemyDirection === 1) || (this.x + this.w > width && enemyDirection === -1) ) ) {
+      // This condition means an enemy is at the edge, but the global direction is already set to move it away.
+      // This can happen if the direction flipped in a previous enemy's update call in the same frame.
+      // To prevent it from being pushed further off-screen or getting stuck, we might skip the y-shift for it.
+      // Or, more simply, the global direction flip should only happen once.
+      // Let's refine this: the direction flip should be handled by the game loop, not individual enemies.
+      // For this iteration, we'll keep it simple: if an enemy hits an edge, it triggers the direction flip.
+      // This might cause multiple flips if not careful.
+    }
+
+
+    // The problem of multiple direction flips and y-shifts per frame if many enemies hit the edge:
+    // A better approach is to detect if *any* enemy hit an edge during the update phase,
+    // then apply the direction change and y-shift *once* in the main draw loop.
+    // However, the current structure calls update() on each enemy individually.
+
+    // Simplified edge logic for now (will apply to the one that hits it):
+    if (this.x < 0 || this.x + this.w > width) {
+        // Only flip direction if the current direction would push it further out.
+        // This prevents immediate re-flipping if multiple enemies are at the edge.
+        if ((this.x < 0 && enemyDirection === -1) || (this.x + this.w > width && enemyDirection === 1)) {
+            enemyDirection *= -1; // Reverse direction for all enemies
+            let verticalStep = 10 + floor(level / 2) * 2; // Define vertical step based on level
+            enemies.forEach(e => {
+                if (e.type !== 'kamikaze') { // Kamikaze enemies ignore the group y-shift
+                    e.y += verticalStep; // Use dynamic vertical step
+                }
+            });
+        }
+    }
+  }
+
+  // Draws the enemy ship
+  draw() {
+    push(); // Save current drawing style
+    translate(this.x + this.w / 2, this.y + this.h / 2); // Move origin to enemy center
+
+    const flap = sin(frameCount * 0.2) * 5; // Wing flap animation, slightly increased effect
+    const bodyColor = color(100, 0, 0); // Dark red for body
+    const wingColor = color(200, 50, 50); // Brighter red for wings
+    const accentColor = color(255, 100, 100); // For highlights or details
+
+    // Main Body (more oval/organic)
+    noStroke();
+    fill(bodyColor);
+    ellipse(0, 0, this.w * 0.7, this.h); // Main body ellipse
+
+    // Wings (swept back, animated)
+    fill(wingColor);
+    // Left Wing
+    beginShape();
+    vertex(-this.w * 0.25, -this.h * 0.1); // Connects to body
+    vertex(-this.w * 0.6 + flap / 3, -this.h * 0.3 - flap); // Outer top point
+    vertex(-this.w * 0.5, this.h * 0.4);    // Outer bottom point
+    endShape(CLOSE);
+
+    // Right Wing
+    beginShape();
+    vertex(this.w * 0.25, -this.h * 0.1);  // Connects to body
+    vertex(this.w * 0.6 - flap / 3, -this.h * 0.3 - flap);  // Outer top point
+    vertex(this.w * 0.5, this.h * 0.4);     // Outer bottom point
+    endShape(CLOSE);
+
+    // "Head" or "Cockpit" area
+    fill(accentColor);
+    ellipse(0, -this.h * 0.35, this.w * 0.3, this.h * 0.25);
+
+    // Engine glow (similar to before but adapted)
+    blendMode(ADD);
+    fill(255, 50 + flap * 5, 50, 150); // More dynamic glow
+    ellipse(0, this.h * 0.45, this.w * 0.25, this.h * 0.3 + flap / 2);
+    blendMode(BLEND); // Reset blend mode
+
+    pop(); // Restore drawing style
+  }
+}
+
 // ==================
 // KamikazeEnemy Class
 // ==================
@@ -346,133 +473,6 @@ class EnemyBullet {
     // AABB collision detection
     return this.x > player.x && this.x < player.x + player.w &&
            this.y > player.y && this.y < player.y + player.h;
-  }
-}
-
-/**
- * Represents an enemy ship.
- * The comment "Enemy - én 'Arrow'" seems to be a note in Norwegian,
- * possibly referring to the shape or type of enemy.
- */
-class Enemy {
-  constructor(x, y) {
-    this.x = x; // X-coordinate
-    this.y = y; // Y-coordinate
-    this.w = 40; // Width
-    this.h = 28; // Height
-    this.origX = x; // Original x-position for zigzag pattern
-    this.zigzag = (y / 40) % 2 === 0; // Determines if this enemy uses zigzag movement
-    this.health = 1; // Default health
-    this.scoreValue = 10; // Default score value
-    this.type = 'normal'; // Default enemy type
-  }
-
-  // Updates enemy position and behavior
-  update() {
-    // Default movement for 'normal' type
-    if (this.type === 'normal') {
-      if (this.zigzag) {
-        // Sinusoidal movement for zigzag pattern
-        this.x = this.origX + sin(frameCount * 0.12) * 20;
-      } else {
-        // Standard side-to-side movement
-        this.x += enemyDirection * enemySpeed;
-      }
-    }
-
-    // Global edge detection and reaction
-    // This part is called for every enemy, but specific types might have already updated their x,y
-    // or might ignore the y-shift.
-    let hitEdge = false;
-    if (this.x < 0 || this.x + this.w > width) {
-      // Check if this instance is the one triggering the direction change.
-      // To prevent multiple direction changes in one frame if multiple enemies hit the wall.
-      // This simple check might still allow multiple flips if enemies are perfectly aligned.
-      // A more robust solution would be to check this once per frame in the main draw loop.
-      // For now, let's assume this is okay for typical gameplay scenarios.
-      if ( (this.x < 0 && enemyDirection === -1) || (this.x + this.w > width && enemyDirection === 1) ) {
-        // This enemy is at the edge and moving towards it, so it's a "fresh" hit.
-      } else {
-        // This enemy is at the edge but the direction has already flipped, or it's moving away.
-        // Do not trigger another immediate flip.
-      }
-       hitEdge = true; // Mark that an edge was hit by at least one enemy
-    }
-
-    if (hitEdge && ( (this.x < 0 && enemyDirection === 1) || (this.x + this.w > width && enemyDirection === -1) ) ) {
-      // This condition means an enemy is at the edge, but the global direction is already set to move it away.
-      // This can happen if the direction flipped in a previous enemy's update call in the same frame.
-      // To prevent it from being pushed further off-screen or getting stuck, we might skip the y-shift for it.
-      // Or, more simply, the global direction flip should only happen once.
-      // Let's refine this: the direction flip should be handled by the game loop, not individual enemies.
-      // For this iteration, we'll keep it simple: if an enemy hits an edge, it triggers the direction flip.
-      // This might cause multiple flips if not careful.
-    }
-
-
-    // The problem of multiple direction flips and y-shifts per frame if many enemies hit the edge:
-    // A better approach is to detect if *any* enemy hit an edge during the update phase,
-    // then apply the direction change and y-shift *once* in the main draw loop.
-    // However, the current structure calls update() on each enemy individually.
-
-    // Simplified edge logic for now (will apply to the one that hits it):
-    if (this.x < 0 || this.x + this.w > width) {
-        // Only flip direction if the current direction would push it further out.
-        // This prevents immediate re-flipping if multiple enemies are at the edge.
-        if ((this.x < 0 && enemyDirection === -1) || (this.x + this.w > width && enemyDirection === 1)) {
-            enemyDirection *= -1; // Reverse direction for all enemies
-            let verticalStep = 10 + floor(level / 2) * 2; // Define vertical step based on level
-            enemies.forEach(e => {
-                if (e.type !== 'kamikaze') { // Kamikaze enemies ignore the group y-shift
-                    e.y += verticalStep; // Use dynamic vertical step
-                }
-            });
-        }
-    }
-  }
-
-  // Draws the enemy ship
-  draw() {
-    push(); // Save current drawing style
-    translate(this.x + this.w / 2, this.y + this.h / 2); // Move origin to enemy center
-
-    const flap = sin(frameCount * 0.2) * 5; // Wing flap animation, slightly increased effect
-    const bodyColor = color(100, 0, 0); // Dark red for body
-    const wingColor = color(200, 50, 50); // Brighter red for wings
-    const accentColor = color(255, 100, 100); // For highlights or details
-
-    // Main Body (more oval/organic)
-    noStroke();
-    fill(bodyColor);
-    ellipse(0, 0, this.w * 0.7, this.h); // Main body ellipse
-
-    // Wings (swept back, animated)
-    fill(wingColor);
-    // Left Wing
-    beginShape();
-    vertex(-this.w * 0.25, -this.h * 0.1); // Connects to body
-    vertex(-this.w * 0.6 + flap / 3, -this.h * 0.3 - flap); // Outer top point
-    vertex(-this.w * 0.5, this.h * 0.4);    // Outer bottom point
-    endShape(CLOSE);
-
-    // Right Wing
-    beginShape();
-    vertex(this.w * 0.25, -this.h * 0.1);  // Connects to body
-    vertex(this.w * 0.6 - flap / 3, -this.h * 0.3 - flap);  // Outer top point
-    vertex(this.w * 0.5, this.h * 0.4);     // Outer bottom point
-    endShape(CLOSE);
-    
-    // "Head" or "Cockpit" area
-    fill(accentColor);
-    ellipse(0, -this.h * 0.35, this.w * 0.3, this.h * 0.25);
-
-    // Engine glow (similar to before but adapted)
-    blendMode(ADD);
-    fill(255, 50 + flap * 5, 50, 150); // More dynamic glow
-    ellipse(0, this.h * 0.45, this.w * 0.25, this.h * 0.3 + flap / 2);
-    blendMode(BLEND); // Reset blend mode
-
-    pop(); // Restore drawing style
   }
 }
 
